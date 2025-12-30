@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MiniBoard</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f6f7f9; color: #111; }
+        header { padding: 16px 20px; background: #fff; border-bottom: 1px solid #e6e8ee; position: sticky; top: 0; z-index: 10; }
+        main { max-width: 980px; margin: 0 auto; padding: 20px; }
+        .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+        .card { background: #fff; border: 1px solid #e6e8ee; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+        .grow { flex: 1; }
+        input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #d7dbe6; border-radius: 10px; font-size: 14px; }
+        textarea { min-height: 140px; resize: vertical; }
+        button { padding: 10px 12px; border: 1px solid #d7dbe6; background: #fff; border-radius: 10px; cursor: pointer; }
+        button.primary { background: #111; color: #fff; border-color: #111; }
+        button.danger { background: #fff; color: #b00020; border-color: #f0c2c7; }
+        button:disabled { opacity: .5; cursor: not-allowed; }
+        .list { display: grid; gap: 12px; margin-top: 12px; }
+        .postItem { display: flex; justify-content: space-between; gap: 12px; }
+        .postTitle { font-weight: 700; }
+        .muted { color: #666; font-size: 13px; }
+        .split { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+        @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+        .hr { height: 1px; background: #e6e8ee; margin: 12px 0; }
+        .toast { position: fixed; right: 16px; bottom: 16px; background: #111; color: #fff; padding: 10px 12px; border-radius: 10px; display: none; }
+        .badge { display:inline-block; padding: 2px 8px; border-radius: 999px; background:#eef1ff; color:#2a3cff; font-size:12px; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+<header>
+    <div class="row" style="max-width:980px;margin:0 auto;">
+        <div style="font-weight:800;">MiniBoard</div>
+        <div class="grow"></div>
+        <div class="muted">백엔드: <span id="apiBaseLabel" class="mono"></span></div>
+    </div>
+</header>
+
+<main class="split">
+    <!-- LEFT: List/Search -->
+    <section class="card">
+        <div class="row">
+            <div class="grow">
+                <input id="qInput" placeholder="제목 검색(q)" />
+            </div>
+            <button id="searchBtn">검색</button>
+            <button id="resetBtn">초기화</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <div class="row">
+            <div class="muted">페이지</div>
+            <button id="prevBtn">이전</button>
+            <div class="badge"><span id="pageLabel">0</span></div>
+            <button id="nextBtn">다음</button>
+
+            <div class="grow"></div>
+
+            <div class="muted">size</div>
+            <select id="sizeSelect">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="20">20</option>
+            </select>
+        </div>
+
+        <div class="list" id="list"></div>
+
+        <div class="hr"></div>
+        <div class="muted">
+            팁: 항목 클릭하면 오른쪽에 상세가 표시됩니다.
+        </div>
+    </section>
+
+    <!-- RIGHT: Detail + Form -->
+    <section class="card">
+        <div class="row">
+            <div style="font-weight:800;">상세 / 작성 / 수정</div>
+            <div class="grow"></div>
+            <button id="newBtn" class="primary">새 글</button>
+        </div>
+
+        <div class="hr"></div>
+
+        <!-- Detail -->
+        <div id="detailBox" style="display:none;">
+            <div class="muted">ID</div>
+            <div class="mono" id="detailId"></div>
+
+            <div class="hr"></div>
+
+            <div class="muted">제목</div>
+            <div id="detailTitle" style="font-weight:800;margin-top:4px;"></div>
+
+            <div style="height:10px;"></div>
+
+            <div class="muted">작성자</div>
+            <div id="detailAuthor"></div>
+
+            <div style="height:10px;"></div>
+
+            <div class="muted">내용</div>
+            <div id="detailContent" style="white-space:pre-wrap; margin-top:4px;"></div>
+
+            <div class="hr"></div>
+
+            <div class="row">
+                <button id="editBtn">수정</button>
+                <button id="deleteBtn" class="danger">삭제</button>
+            </div>
+            <div class="muted" style="margin-top:8px;">
+                createdAt: <span id="detailCreatedAt" class="mono"></span><br/>
+                updatedAt: <span id="detailUpdatedAt" class="mono"></span>
+            </div>
+        </div>
+
+        <!-- Form -->
+        <form id="formBox" style="display:none;">
+            <input type="hidden" id="formMode" value="create" />
+            <input type="hidden" id="editId" value="" />
+
+            <div class="muted">제목</div>
+            <input id="titleInput" maxlength="100" placeholder="제목(최대 100자)" required />
+
+            <div style="height:10px;"></div>
+
+            <div class="muted">내용</div>
+            <textarea id="contentInput" placeholder="내용" required></textarea>
+
+            <div style="height:10px;"></div>
+
+            <div class="muted">작성자 (작성 시만 필요)</div>
+            <input id="authorInput" maxlength="30" placeholder="작성자(최대 30자)" />
+
+            <div class="hr"></div>
+
+            <div class="row">
+                <button type="submit" class="primary" id="submitBtn">저장</button>
+                <button type="button" id="cancelBtn">취소</button>
+            </div>
+            <div class="muted" style="margin-top:8px;" id="formHint"></div>
+        </form>
+
+        <!-- Empty -->
+        <div id="emptyBox" class="muted">
+            왼쪽에서 게시글을 선택하거나, “새 글”을 눌러 작성하세요.
+        </div>
+    </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    // =========================
+    // Config
+    // =========================
+    // 백엔드 주소를 바꾸고 싶으면 여기만 변경하세요.
+    const API_BASE = "http://localhost:8080";
+    document.getElementById("apiBaseLabel").textContent = API_BASE;
+
+    // =========================
+    // State
+    // =========================
+    let state = {
+      page: 0,
+      size: 10,
+      q: "",
+      totalPages: 0,
+      selectedId: null,
+    };
+
+    // =========================
+    // Helpers
+    // =========================
+    function toast(msg) {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.style.display = "block";
+      clearTimeout(window.__toastTimer);
+      window.__toastTimer = setTimeout(() => { t.style.display = "none"; }, 1800);
+    }
+
+    async function http(url, options = {}) {
+      const res = await fetch(url, {
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options,
+      });
+
+      if (!res.ok) {
+        // Spring validation / error response 대비
+        let body = null;
+        try { body = await res.json(); } catch (_) {}
+        const message = body?.message || `HTTP ${res.status}`;
+        const details = body?.details ? JSON.stringify(body.details) : "";
+        throw new Error(details ? `${message} - ${details}` : message);
+      }
+
+      if (res.status === 204) return null;
+      return res.json();
+    }
+
+    function qs(params) {
+      const sp = new URLSearchParams();
+      Object.entries(params).forEach(([k,v]) => {
+        if (v === undefined || v === null) return;
+        if (typeof v === "string" && v.trim() === "") return;
+        sp.set(k, v);
+      });
+      const s = sp.toString();
+      return s ? `?${s}` : "";
+    }
+
+    function showBox(which) {
+      const detail = document.getElementById("detailBox");
+      const form = document.getElementById("formBox");
+      const empty = document.getElementById("emptyBox");
+      detail.style.display = which === "detail" ? "block" : "none";
+      form.style.display = which === "form" ? "block" : "none";
+      empty.style.display = which === "empty" ? "block" : "none";
+    }
+
+    function setFormMode(mode, post) {
+      document.getElementById("formMode").value = mode;
+      document.getElementById("editId").value = post?.id || "";
+      document.getElementById("titleInput").value = post?.title || "";
+      document.getElementById("contentInput").value = post?.content || "";
+
+      const authorInput = document.getElementById("authorInput");
+      const hint = document.getElementById("formHint");
+
+      if (mode === "create") {
+        authorInput.disabled = false;
+        authorInput.required = true;
+        authorInput.value = "";
+        hint.textContent = "작성 모드: 제목/내용/작성자를 입력하고 저장하세요.";
+        document.getElementById("submitBtn").textContent = "작성하기";
+      } else {
+        authorInput.disabled = true; // 백엔드에서 author 수정 불가 정책
+        authorInput.required = false;
+        authorInput.value = post?.author || "";
+        hint.textContent = "수정 모드: 제목/내용만 수정 가능합니다.";
+        document.getElementById("submitBtn").textContent = "수정하기";
+      }
+    }
+
+    // =========================
+    // API
+    // =========================
+    async function fetchList() {
+      const listEl = document.getElementById("list");
+      listEl.innerHTML = `<div class="muted">불러오는 중...</div>`;
+
+      try {
+        const data = await http(`${API_BASE}/posts${qs({ q: state.q, page: state.page, size: state.size })}`);
+        state.totalPages = data.totalPages ?? 0;
+        document.getElementById("pageLabel").textContent = `${state.page} / ${Math.max(state.totalPages - 1, 0)}`;
+
+        const items = data.content || [];
+        if (items.length === 0) {
+          listEl.innerHTML = `<div class="muted">게시글이 없습니다.</div>`;
+          return;
+        }
+
+        listEl.innerHTML = "";
+        items.forEach(p => {
+          const div = document.createElement("div");
+          div.className = "card postItem";
+          div.style.padding = "12px";
+          div.style.cursor = "pointer";
+          div.onclick = () => selectPost(p.id);
+
+          div.innerHTML = `
+            <div class="grow">
+              <div class="postTitle">${escapeHtml(p.title)}</div>
+              <div class="muted">${escapeHtml(p.author)} · <span class="mono">${formatDate(p.createdAt)}</span></div>
+            </div>
+            <div class="muted mono">#${p.id}</div>
+          `;
+          listEl.appendChild(div);
+        });
+
+      } catch (e) {
+        listEl.innerHTML = `<div class="muted">목록 로딩 실패: ${escapeHtml(e.message)}</div>`;
+        toast("목록 로딩 실패");
+      }
+    }
+
+    async function selectPost(id) {
+      try {
+        const p = await http(`${API_BASE}/posts/${id}`);
+        state.selectedId = id;
+
+        document.getElementById("detailId").textContent = p.id;
+        document.getElementById("detailTitle").textContent = p.title;
+        document.getElementById("detailAuthor").textContent = p.author;
+        document.getElementById("detailContent").textContent = p.content;
+        document.getElementById("detailCreatedAt").textContent = formatDate(p.createdAt);
+        document.getElementById("detailUpdatedAt").textContent = formatDate(p.updatedAt);
+
+        showBox("detail");
+        toast("상세 로딩 완료");
+      } catch (e) {
+        toast("상세 로딩 실패");
+        showBox("empty");
+      }
+    }
+
+    async function createPost(payload) {
+      return http(`${API_BASE}/posts`, { method: "POST", body: JSON.stringify(payload) });
+    }
+
+    async function updatePost(id, payload) {
+      return http(`${API_BASE}/posts/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+    }
+
+    async function deletePost(id) {
+      return http(`${API_BASE}/posts/${id}`, { method: "DELETE" });
+    }
+
+    // =========================
+    // Events
+    // =========================
+    document.getElementById("searchBtn").onclick = () => {
+      state.q = document.getElementById("qInput").value.trim();
+      state.page = 0;
+      fetchList();
+    };
+
+    document.getElementById("resetBtn").onclick = () => {
+      document.getElementById("qInput").value = "";
+      state.q = "";
+      state.page = 0;
+      fetchList();
+    };
+
+    document.getElementById("sizeSelect").onchange = (e) => {
+      state.size = Number(e.target.value);
+      state.page = 0;
+      fetchList();
+    };
+
+    document.getElementById("prevBtn").onclick = () => {
+      if (state.page <= 0) return;
+      state.page -= 1;
+      fetchList();
+    };
+
+    document.getElementById("nextBtn").onclick = () => {
+      if (state.page + 1 >= state.totalPages) return;
+      state.page += 1;
+      fetchList();
+    };
+
+    document.getElementById("newBtn").onclick = () => {
+      setFormMode("create");
+      showBox("form");
+    };
+
+    document.getElementById("cancelBtn").onclick = () => {
+      if (state.selectedId) showBox("detail");
+      else showBox("empty");
+    };
+
+    document.getElementById("editBtn").onclick = async () => {
+      if (!state.selectedId) return;
+      const p = await http(`${API_BASE}/posts/${state.selectedId}`);
+      setFormMode("edit", p);
+      showBox("form");
+    };
+
+    document.getElementById("deleteBtn").onclick = async () => {
+      if (!state.selectedId) return;
+      if (!confirm(`게시글 #${state.selectedId} 을(를) 삭제할까요?`)) return;
+
+      try {
+        await deletePost(state.selectedId);
+        toast("삭제 완료");
+        state.selectedId = null;
+        showBox("empty");
+        // 목록 새로고침 (현재 페이지가 비었을 수도 있어 보정)
+        if (state.page > 0 && state.totalPages > 0) state.page = Math.min(state.page, state.totalPages - 1);
+        await fetchList();
+      } catch (e) {
+        toast("삭제 실패");
+        alert(e.message);
+      }
+    };
+
+    document.getElementById("formBox").onsubmit = async (e) => {
+      e.preventDefault();
+      const mode = document.getElementById("formMode").value;
+
+      const title = document.getElementById("titleInput").value.trim();
+      const content = document.getElementById("contentInput").value.trim();
+      const author = document.getElementById("authorInput").value.trim();
+
+      try {
+        if (mode === "create") {
+          const created = await createPost({ title, content, author });
+          toast("작성 완료");
+          await fetchList();
+          await selectPost(created.id);
+        } else {
+          const id = document.getElementById("editId").value;
+          const updated = await updatePost(id, { title, content });
+          toast("수정 완료");
+          await fetchList();
+          await selectPost(updated.id);
+        }
+      } catch (err) {
+        toast("저장 실패");
+        alert(err.message);
+      }
+    };
+
+    // =========================
+    // Utils
+    // =========================
+    function formatDate(v) {
+      if (!v) return "-";
+      // ISO 문자열이면 Date로 파싱
+      const d = new Date(v);
+      if (Number.isNaN(d.getTime())) return String(v);
+      return d.toLocaleString("ko-KR");
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    // =========================
+    // Init
+    // =========================
+    (async function init() {
+      showBox("empty");
+      state.size = Number(document.getElementById("sizeSelect").value);
+      await fetchList();
+    })();
+</script>
+</body>
+</html>
